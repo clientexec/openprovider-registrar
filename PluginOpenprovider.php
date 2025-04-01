@@ -12,7 +12,6 @@ class PluginOpenprovider extends RegistrarPlugin
 
     private $liveUrl = 'https://api.openprovider.eu/v1beta';
     private $sandBox = 'http://api.sandbox.openprovider.nl:8480/v1beta';
-  //  private $recordTypes = array('A', 'AAAA', 'MX', 'CNAME', 'NS', 'TXT', 'SRV', 'SOA');
 
     public function getVariables()
     {
@@ -62,7 +61,6 @@ class PluginOpenprovider extends RegistrarPlugin
         return $variables;
     }
 
-//working
     public function findHandleByDomName($domainName)
     {
         $getDomain = $this->getDataRequest('domains?full_name=' . $domainName);
@@ -73,25 +71,29 @@ class PluginOpenprovider extends RegistrarPlugin
         }
     }
 
-//Working
     public function doRegister($params)
     {
         $userPackage = new UserPackage($params['userPackageId']);
         $orderid = $this->registerDomain($this->buildRegisterParams($userPackage, $params));
         if ($orderid['result'] == 'success') {
             $userPackage->setCustomField("Registration Status", "Registered");
-            $userPackage->setCustomField("Registrar Order Id", $userPackage->getCustomField("Registrar") . '_-_' . $orderid['domainId'] . '_-_' . $orderid['handleId']); // store user pattern
+            $userPackage->setCustomField(
+                "Registrar Order Id",
+                $userPackage->getCustomField("Registrar") . '_-_' . $orderid['domainId'] . '_-_' . $orderid['handleId']
+            );
             return $userPackage->getCustomField('Domain Name') . ' has been registered.';
         } else {
             return $userPackage->getCustomField('Domain Name') . ' not registered.';
         }
     }
 
-//Working
     public function registerDomain($params)
     {
         $domDetails = $this->findHandleByDomName($params["sld"] . '.' . $params["tld"]);
-        $handleId = $domDetails['owner_handle'];
+        $handleId = '';
+        if (is_array($domDetails)) {
+            $handleId = $domDetails['owner_handle'];
+        }
 
         $tld = $params["tld"];
         $sld = $params["sld"];
@@ -105,11 +107,7 @@ class PluginOpenprovider extends RegistrarPlugin
                     break;
                 }
             }
-        } else {
-            $nameservers[] = 'ns1.op.eu';
-            $nameservers[] = 'ns2.op.nl';
         }
-
 
         if ($handleId) {
             $crequestData = $this->getDataRequest('customers/' . $handleId);
@@ -144,7 +142,7 @@ class PluginOpenprovider extends RegistrarPlugin
             $city = $params["RegistrantCity"];
             $postcode = $params["RegistrantPostalCode"];
             $phonecc = $this->countryCodePhone($params['RegistrantCountry']);
-            $phonenumber = $params['RegistrantPhone'];
+            $phonenumber = $this->validatePhone($params['RegistrantPhone'], $params['RegistrantCountry']);
 
             $AddClient['address']['street'] = $address1 . ' ' . $address2;
             $AddClient['address']['number'] = "";
@@ -165,9 +163,6 @@ class PluginOpenprovider extends RegistrarPlugin
             $AddClient['name']['first_name'] = $firstname;
             $AddClient['name']['full_name'] = $firstname . ' ' . $lastname;
             $AddClient['name']['last_name'] = $lastname;
-            //  $AddClient['name']['prefix'] = "";
-            //  $AddClient['name']['initials'] = "";
-
             $addClientRes = $this->postDataRequest('customers', $AddClient);
             if ($addClientRes['handle']) {
                 $handleID = $addClientRes['handle'];
@@ -195,7 +190,6 @@ class PluginOpenprovider extends RegistrarPlugin
         return $values;
     }
 
-//working
     private function countryCodePhone($country)
     {
         $query = "SELECT phone_code FROM country WHERE iso=? AND phone_code != ''";
@@ -216,11 +210,10 @@ class PluginOpenprovider extends RegistrarPlugin
         return $phoneCode;
     }
 
-//working
     public function doRenew($params)
     {
         $userPackage = new UserPackage($params['userPackageId']);
-        $orderid = $this->registerDomain($this->buildRegisterParams($userPackage, $params));
+        $orderid = $this->renewDomain($this->buildRegisterParams($userPackage, $params));
         if ($orderid['result'] == 'success') {
             return $userPackage->getCustomField('Domain Name') . ' has been renewed.';
         } else {
@@ -228,7 +221,6 @@ class PluginOpenprovider extends RegistrarPlugin
         }
     }
 
-//working but in sandbox its not available
     public function renewDomain($params)
     {
         if (@$this->settings->get('plugin_Openprovider_Use testing server')) {
@@ -236,7 +228,6 @@ class PluginOpenprovider extends RegistrarPlugin
         } else {
             $domDetails = $this->findHandleByDomName($params["sld"] . '.' . $params["tld"]);
             $domainId = $domDetails['id'];
-
             $renewPeriod['period'] = "1";
 
             $orderRes = $this->postDataRequest('domains/' . $domainId . '/renew', $renewPeriod);
@@ -247,7 +238,6 @@ class PluginOpenprovider extends RegistrarPlugin
         return $values;
     }
 
-//DOne -working
     public function doDomainTransferWithPopup($params)
     {
         $userPackage = new UserPackage($params['userPackageId']);
@@ -261,7 +251,6 @@ class PluginOpenprovider extends RegistrarPlugin
         }
     }
 
-//DOne -working
     public function initiateTransfer($params)
     {
         $domDetails = $this->findHandleByDomName($params["sld"] . '.' . $params["tld"]);
@@ -278,9 +267,6 @@ class PluginOpenprovider extends RegistrarPlugin
                     break;
                 }
             }
-        } else {
-            $nameservers[] = 'ns1.op.eu';
-            $nameservers[] = 'ns2.op.nl';
         }
 
         if (!$handleId) {
@@ -295,7 +281,7 @@ class PluginOpenprovider extends RegistrarPlugin
             $city = $params["RegistrantCity"];
             $postcode = $params["RegistrantPostalCode"];
             $phonecc = $this->countryCodePhone($params['RegistrantCountry']);
-            $phonenumber = $params['RegistrantPhone'];
+            $phonenumber = $this->validatePhone($params['RegistrantPhone'], $params['RegistrantCountry']);
 
             $AddClient['address']['street'] = $address1 . ' ' . $address2;
             $AddClient['address']['number'] = "";
@@ -316,9 +302,6 @@ class PluginOpenprovider extends RegistrarPlugin
             $AddClient['name']['first_name'] = $firstname;
             $AddClient['name']['full_name'] = $firstname . ' ' . $lastname;
             $AddClient['name']['last_name'] = $lastname;
-            //    $AddClient['name']['prefix'] = "Mr.";
-            //    $AddClient['name']['initials'] = "";
-
             $addClientRes = $this->postDataRequest('customers', $AddClient);
             if ($addClientRes['handle']) {
                 $handleID = $addClientRes['handle'];
@@ -369,7 +352,6 @@ class PluginOpenprovider extends RegistrarPlugin
             return $values;
     }
 
-//Working
     public function getDomainInfoDetails($params)
     {
         $domDetails = $this->findHandleByDomName($params["sld"] . '.' . $params["tld"]);
@@ -378,13 +360,11 @@ class PluginOpenprovider extends RegistrarPlugin
         return $this->getDataRequest('domains/' . $domainId);
     }
 
-//Working
     public function getRegistrarLock($params)
     {
         return (($this->getDomainInfoDetails($params)["is_locked"]) ? true : false);
     }
 
-//Working
     public function doSetRegistrarLock($params)
     {
         $userPackage = new UserPackage($params['userPackageId']);
@@ -392,7 +372,6 @@ class PluginOpenprovider extends RegistrarPlugin
         return "Updated Registrar Lock.";
     }
 
-//Working
     public function setRegistrarLock($params)
     {
         $domDetails = $this->getDomainInfoDetails($params);
@@ -404,7 +383,6 @@ class PluginOpenprovider extends RegistrarPlugin
         return $values;
     }
 
-//Working
     public function doSendTransferKey($params)
     {
         $userPackage = new UserPackage($params['userPackageId']);
@@ -412,18 +390,15 @@ class PluginOpenprovider extends RegistrarPlugin
         return 'Successfully sent auth info for ' . $userPackage->getCustomField('Domain Name');
     }
 
-//Working
     public function sendTransferKey($params)
     {
     }
 
-//Working
     public function setAutorenew($params)
     {
         //throw new Exception('This function is not supported');
     }
 
-  //Working
     public function getEPPCode($params)
     {
         $res = $this->getDomainInfoDetails($params)['auth_code'];
@@ -432,7 +407,6 @@ class PluginOpenprovider extends RegistrarPlugin
         }
     }
 
-//working
     public function checkDomain($params)
     {
         $arguments['with_price'] = true;
@@ -441,7 +415,7 @@ class PluginOpenprovider extends RegistrarPlugin
           'name' => $params["sld"]
         ];
         $res = $this->postDataRequest('domains/check', $arguments);
-        if ($res["results"][0]['status'] == "free") { //Domain Available for registration
+        if ($res["results"][0]['status'] == "free") {
             $domains[] = array('tld' => $params['tld'], 'domain' => $params['sld'], 'status' => 0);
         } else {
             $domains[] = array('tld' => $params['tld'], 'domain' => $params['sld'], 'status' => 1);
@@ -449,7 +423,7 @@ class PluginOpenprovider extends RegistrarPlugin
         return array("result" => $domains);
     }
 
-//working
+
     private function makeRequest($reqURLs, $method = 'GET', $data = false)
     {
         if (@$this->settings->get('plugin_Openprovider_Use testing server')) {
@@ -503,7 +477,6 @@ class PluginOpenprovider extends RegistrarPlugin
         return json_decode($response, true);
     }
 
-////working
     public function getDataRequest($endPoint)
     {
         $requestData = $this->makeRequest($endPoint);
@@ -514,7 +487,6 @@ class PluginOpenprovider extends RegistrarPlugin
         }
     }
 
-//working
     public function putDataRequest($endPoint, $PutData)
     {
         $requestData = $this->makeRequest($endPoint, "PUT", $PutData);
@@ -525,7 +497,6 @@ class PluginOpenprovider extends RegistrarPlugin
         }
     }
 
-//working
     public function postDataRequest($endPoint, $PostData)
     {
         $requestData = $this->makeRequest($endPoint, "POST", $PostData);
@@ -536,7 +507,6 @@ class PluginOpenprovider extends RegistrarPlugin
         }
     }
 
-//working
     public function logInRequest()
     {
         if (@$this->settings->get('plugin_Openprovider_Use testing server')) {
@@ -545,8 +515,8 @@ class PluginOpenprovider extends RegistrarPlugin
             $url = $this->liveUrl . '/auth/login';
         }
 
-        $loginData['username'] = @$this->settings->get('plugin_Openprovider_Username');
-        $loginData['password'] = @$this->settings->get('plugin_Openprovider_Password');
+        $loginData['username'] = $this->settings->get('plugin_Openprovider_Username');
+        $loginData['password'] = $this->settings->get('plugin_Openprovider_Password');
         $loginData['ip'] = CE_Lib::getServerAddr();
 
         $headers = array();
@@ -567,7 +537,6 @@ class PluginOpenprovider extends RegistrarPlugin
         }
     }
 
-//working
     public function getContactInformation($params)
     {
         $domDetails = $this->findHandleByDomName($params["sld"] . '.' . $params["tld"]);
@@ -584,21 +553,20 @@ class PluginOpenprovider extends RegistrarPlugin
                 $country = $contact['address']['country'];
             }
 
-              $info[$type]['OrganizationName']  = array($this->user->lang('Organization'), (string)$contact['company_name']);
-              $info[$type]['FirstName'] = array($this->user->lang('First Name'), (string)$contact['name']['first_name']);
-              $info[$type]['LastName']  = array($this->user->lang('Last Name'), (string)$contact['name']['last_name']);
-              $info[$type]['Address1']  = array($this->user->lang('Address') . ' 1', (string)$contact['address']['street']);
-              $info[$type]['City']      = array($this->user->lang('City'), (string)$contact['address']['city']);
-              $info[$type]['StateProvince']  = array($this->user->lang('Province') . '/' . $this->user->lang('State'), (string)$contact['address']['state']);
-              $info[$type]['Country']   = array($this->user->lang('Country'), (string)$country);
-              $info[$type]['PostalCode']  = array($this->user->lang('Postal Code'), (string)$contact['address']['zipcode']);
-              $info[$type]['EmailAddress']     = array($this->user->lang('Email'), (string)$contact['email']);
-              $info[$type]['Phone']  = array($this->user->lang('Phone'), $contact['phone']['country_code'] . $contact['phone']['subscriber_number']);
+            $info[$type]['OrganizationName']  = array($this->user->lang('Organization'), (string)$contact['company_name']);
+            $info[$type]['FirstName'] = array($this->user->lang('First Name'), (string)$contact['name']['first_name']);
+            $info[$type]['LastName']  = array($this->user->lang('Last Name'), (string)$contact['name']['last_name']);
+            $info[$type]['Address1']  = array($this->user->lang('Address') . ' 1', (string)$contact['address']['street']);
+            $info[$type]['City']      = array($this->user->lang('City'), (string)$contact['address']['city']);
+            $info[$type]['StateProvince']  = array($this->user->lang('Province') . '/' . $this->user->lang('State'), (string)$contact['address']['state']);
+            $info[$type]['Country']   = array($this->user->lang('Country'), (string)$country);
+            $info[$type]['PostalCode']  = array($this->user->lang('Postal Code'), (string)$contact['address']['zipcode']);
+            $info[$type]['EmailAddress']     = array($this->user->lang('Email'), (string)$contact['email']);
+            $info[$type]['Phone']  = array($this->user->lang('Phone'), $contact['phone']['country_code'] . $contact['phone']['subscriber_number']);
         }
         return $info;
     }
 
-//working
     public function setContactInformation($params)
     {
         $result = $this->db->query("SELECT iso FROM country WHERE name=?", $params['Registrant_Country']);
@@ -627,7 +595,6 @@ class PluginOpenprovider extends RegistrarPlugin
         return $this->putDataRequest('customers/' . $handleId, $contactData);
     }
 
-//working
     public function getGeneralInfo($params)
     {
         $res = $this->getDomainInfoDetails($params);
@@ -644,7 +611,6 @@ class PluginOpenprovider extends RegistrarPlugin
         }
     }
 
-//working
     public function getTransferStatus($params)
     {
         $getDomain = $this->getDomainInfoDetails($params);
@@ -666,7 +632,6 @@ class PluginOpenprovider extends RegistrarPlugin
         return $resultmsg;
     }
 
-//Done
     public function getTLDsAndPrices($params)
     {
         return [];
@@ -682,21 +647,20 @@ class PluginOpenprovider extends RegistrarPlugin
         return ;
     }
 
-//working
     public function getNameServers($params)
     {
-              $name_servers = $this->getDomainInfoDetails($params)['name_servers'];
+        $name_servers = $this->getDomainInfoDetails($params)['name_servers'];
         if ($name_servers) {
             $info = [];
             foreach ($name_servers as $key => $ns) {
-                          $info[] = $ns["name"];
+                $info[] = $ns["name"];
             }
         } else {
             $info = [];
         }
-              return $info;
+        return $info;
     }
-//working
+
     public function setNameServers($params)
     {
         $domainNameId = $this->getDomainInfoDetails($params)['id'];
@@ -714,16 +678,42 @@ class PluginOpenprovider extends RegistrarPlugin
         if ($manageRes["code"] != '0') {
               $values = $manageRes["desc"];
         }
-            return $valueserror;
+        return $valueserror;
+    }
+
+    private function validatePhone($phone, $country)
+    {
+        // strip all non numerical values
+        $phone = preg_replace('/[^\d]/', '', $phone);
+
+        if ($phone == '') {
+            return $phone;
+        }
+
+        $query = "SELECT phone_code FROM country WHERE iso=? AND phone_code != ''";
+        $result = $this->db->query($query, $country);
+        if (!$row = $result->fetch()) {
+            return $phone;
+        }
+
+        // check if code is already there
+        $code = $row['phone_code'];
+        $phone = preg_replace("/^($code)(\\d+)/", '\2', $phone);
+
+        if ($phone[0] == '+') {
+            return substr($phone, 1);
+        }
+
+        // if not, prepend it
+        return "$phone";
     }
 
     public function fetchDomains($params)
     {
         $domainList = [];
         $response = $this->getDataRequest('domains');
-        $total = $response['data']['total'];
-        foreach ($response['data']['results'] as $domain) {
-            CE_Lib::log(4, "DomId: " . $domain['id']);
+        $total = $response['total'];
+        foreach ($response['results'] as $domain) {
             $data = [];
             $data['id'] = (int)$domain['id'];
             $data['sld'] = $domain['domain']['name'];
