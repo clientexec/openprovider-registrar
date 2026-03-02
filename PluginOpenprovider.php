@@ -109,6 +109,12 @@ class PluginOpenprovider extends RegistrarPlugin
             }
         }
 
+        if (count($nameservers) == 0) {
+            $nameservers[] = 'ns1.openprovider.nl';
+            $nameservers[] = 'ns2.openprovider.nl';
+            $nameservers[] = 'ns3.openprovider.nl';
+        }
+
         if ($handleId) {
             $crequestData = $this->getDataRequest('customers/' . $handleId);
             $handleID = $crequestData['handle'];
@@ -254,8 +260,12 @@ class PluginOpenprovider extends RegistrarPlugin
     public function initiateTransfer($params)
     {
         $domDetails = $this->findHandleByDomName($params["sld"] . '.' . $params["tld"]);
-        $handleId = $domDetails['owner_handle'];
+        $handleId = '';
+        if (is_array($domDetails)) {
+            $handleId = $domDetails['owner_handle'];
+        }
 
+        $nameservers = [];
         $authCode = $params["eppCode"];
         $tld = $params["tld"];
         $sld = $params["sld"];
@@ -267,6 +277,12 @@ class PluginOpenprovider extends RegistrarPlugin
                     break;
                 }
             }
+        }
+
+        if (count($nameservers) == 0) {
+            $nameservers[] = 'ns1.openprovider.nl';
+            $nameservers[] = 'ns2.openprovider.nl';
+            $nameservers[] = 'ns3.openprovider.nl';
         }
 
         if (!$handleId) {
@@ -540,6 +556,9 @@ class PluginOpenprovider extends RegistrarPlugin
     public function getContactInformation($params)
     {
         $domDetails = $this->findHandleByDomName($params["sld"] . '.' . $params["tld"]);
+        if (!isset($domDetails['owner_handle'])) {
+            throw new CE_Exception($params["sld"] . '.' . $params["tld"] . ' has no owner handle');
+        }
         $handleId = $domDetails['owner_handle'];
         $contact = $this->getDataRequest('customers/' . $handleId);
 
